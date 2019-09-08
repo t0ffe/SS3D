@@ -7,7 +7,7 @@ public class HumanMovement : NetworkBehaviour
     [SyncVar]
     private float gravity = 10f;
     [SyncVar]
-    public float speed = 10f;
+    private float speed = 5f;
     [SyncVar]
     private float acceleration = 10f;
     private float floatingStartTime;
@@ -15,6 +15,10 @@ public class HumanMovement : NetworkBehaviour
     private float floatingSpeed = 5.0f;
     public float floatingHeight = -1.987f;
     private bool floating = false;
+    private bool walking = false;    // to toggle between walking and running
+    public float walkSpeed = 1f;    // how fast walking should be
+    public float runSpeed = 5f;    // how fast running should be
+    
 
     private Animator characterAnimator;
     private CharacterController characterController;
@@ -35,13 +39,26 @@ public class HumanMovement : NetworkBehaviour
             // exit from update if this is not the local player
             return;
         }
-        
-        var input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical")).normalized;
-        currentDirection = Vector2.MoveTowards(currentDirection, input, acceleration * Time.deltaTime);
+
+        var input = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
+        currentDirection = Vector2.MoveTowards(currentDirection,Vector2.ClampMagnitude(input, 1f), acceleration * Time.deltaTime);
         
 
-        //characterAnimator.SetFloat("Speed", 1f);
-        if(currentDirection.magnitude > 0)
+        if(Input.GetKeyDown(KeyCode.Tab))    // toggle between walking and running by pressing "Tab"
+        {
+            if (walking)
+            {
+                speed = runSpeed;
+                walking = false;
+            }
+            else
+            {
+                speed = walkSpeed;
+                walking = true;
+            }
+        }
+
+        if (currentDirection.magnitude > 0)
         {
             // Move relative to the camera
             Transform relativeMovement = camera.transform;
@@ -53,14 +70,22 @@ public class HumanMovement : NetworkBehaviour
                 right.Normalize();
                 
                 var dir = right * currentDirection.x + forward * currentDirection.y;
-                characterController.Move(dir * Time.deltaTime * speed);
+                characterController.Move(dir * Time.deltaTime * (speed));
                 transform.rotation = Quaternion.LookRotation(dir);
             }
         }
+       
         if (characterController.transform.position.y > floatingHeight)
         {
             characterController.Move(Vector3.down * gravity * Time.deltaTime);
-            characterAnimator.SetFloat("Speed", new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical")).magnitude);
+            if (walking)    // set animation based on input and whether player is walking or not
+            {
+                characterAnimator.SetFloat("Speed", Vector2.ClampMagnitude(input, 1f).magnitude/2);
+            }
+            else
+            {
+                characterAnimator.SetFloat("Speed", Vector2.ClampMagnitude(input, 1f).magnitude);
+            }
             floating = false;
         } 
         else
@@ -69,7 +94,7 @@ public class HumanMovement : NetworkBehaviour
             {
                 floating = true;
                 floatingStartTime = Time.time;
-                characterAnimator.SetFloat("Speed", Vector2.zero.magnitude);
+                characterAnimator.SetFloat("Speed", 0f);
             }
             var pos = characterController.transform.position;
             var floatPos = new Vector3(characterController.transform.position.x,
